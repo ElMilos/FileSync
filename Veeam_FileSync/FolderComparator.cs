@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,47 +11,74 @@ namespace Veeam_FileSync
     internal class FolderComparator
     {
 
-         string sourceDirPath = "";
-         string replicaDirPath = "";
+        string sourceDirPath = "";
+        string replicaDirPath = "";
+        string logFilePath = "";
+        List<string> operationList = new List<string>();
 
-        public FolderComparator(string source = "", string replica = "")
+        public FolderComparator(string source = "", string replica = "", string log = "log.txt")
         {
             this.sourceDirPath = source;
             this.replicaDirPath = replica;
+            this.logFilePath = log;
         }
 
-         public void CheckFodlers()
+        public void CheckFodlers()
         {
 
             if (!Directory.Exists(sourceDirPath)) return;
             if (!Directory.Exists(replicaDirPath)) return;
 
 
-            string[] filesSource = Directory.GetFiles(sourceDirPath, "*", SearchOption.AllDirectories);
-            string[] fileSourceRelative = filesSource.Select(s => s.Replace($"{sourceDirPath}\\", "")).ToArray();
+            var sourceMap = GetFilesMap(sourceDirPath);
+            var replicaMap = GetFilesMap(replicaDirPath);
 
-            string[] dirsSource = Directory.GetDirectories(sourceDirPath, "*", SearchOption.AllDirectories);
+            var dirsSourceRelative = GetDirsList(sourceDirPath);
+            var dirsReplicaRelative = GetDirsList(replicaDirPath);
 
-            foreach (var dir in dirsSource)
+            SyncDir(dirsSourceRelative, dirsReplicaRelative);
+            SyncFiles(sourceMap, replicaMap);
+
+            LogToFile();
+        }
+
+        private List<string> GetDirsList(string folderPath)
+        {
+            List<string> dirsSource = Directory.
+                GetDirectories(folderPath, "*", SearchOption.AllDirectories)
+                .Select(d => Path.GetRelativePath(folderPath, d))
+                .ToList();
+
+            return dirsSource;
+        }
+
+        private Dictionary<string, string> GetFilesMap(string folderPath)
+        {
+            string[] filesSource = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
+            string[] fileSourceRelative = filesSource.Select(
+                s => s.Replace($"{folderPath}\\", "")).ToArray();
+
+            var map = filesSource.Zip(fileSourceRelative, (full, relative) => new { full, relative })
+                                 .ToDictionary(x => x.full, x => x.relative);
+            return map;
+        }
+
+
+        private void SyncDir(List<string> sourceDir, List<string> replicaDir)
+        {
+            var addition = sourceDir.Except(replicaDir).ToList();
+
+            foreach (var folder in addition)
             {
-                string rel = Path.GetRelativePath(sourceDirPath, dir);
-                string destDir = Path.Combine(replicaDirPath, rel);
+                string destDir = Path.Combine(replicaDirPath, folder);
                 Directory.CreateDirectory(destDir);
+
+                operationList.Add($"folder added: {folder}");
             }
+        }
 
-
-            var sourceMap = filesSource.Zip(fileSourceRelative, (full, relative) => new { full, relative })
-                                 .ToDictionary(x => x.full, x => x.relative);
-
-            string[] filesReplica = Directory.GetFiles(replicaDirPath, "*", SearchOption.AllDirectories);
-            string[] fileReplicaRelative = filesSource.Select(s => s.Replace($"{replicaDirPath}\\", "")).ToArray();
-
-            var replicaMap = filesReplica.Zip(fileReplicaRelative, (full, relative) => new { full, relative })
-                                 .ToDictionary(x => x.full, x => x.relative);
-
-
-
-
+        private void SyncFiles(Dictionary<string, string> sourceMap, Dictionary<string, string> replicaMap)
+        { 
 
             foreach (var pathSource in sourceMap)
             {
@@ -70,30 +98,53 @@ namespace Veeam_FileSync
                         if (infoSource.LastWriteTimeUtc != infoReplica.LastWriteTimeUtc)
                         {
                             CopyFile(pathSource.Key, replicaDirPath, pathReplica.Value);
+                            operationList.Add($"File updated: {pathReplica.Key}");
                         }
                         replicaMap.Remove(pathReplica.Key);
                     }
                     continue;
                 }
                 CopyFile(pathSource.Key, replicaDirPath, pathSource.Value);
+                operationList.Add($"File added: {replicaDirPath}{pathSource.Value}");
             }
 
+            DeleteExcessFiles(replicaMap);
         }
-
 
          private void CopyFile(string source, string replica, string name)
         {
-            //int i = name.LastIndexOf('\\');
-            //string rel = name.Remove(i, name.Length - i);
-
             File.Copy(source, $"{replica}\\{name}", true);
         }
 
 
-        private void LogOperation()
+        private void LogToFile()
         {
-            //TO DO
+           foreach (string log in operationList)
+            {
+                File.AppendAllText(logFilePath, $"{log}\n");
+            }
         }
 
+        private void DeleteExcessFiles(Dictionary<string,string> excessMap)
+        {
+            foreach (var file in excessMap)
+            {
+                File.Delete(file.Key);
+
+                operationList.Add($"File deleted: {file.Key}");
+            }
+        }
+
+        private void DeleteExcessDirs(List<string> sourceDir, List<string> replicaDir)
+        {
+            var excess = replicaDir.Except(sourceDir).ToList();
+
+            foreach (var folder in excess)
+            {
+                File.Delete(folder);
+
+                operationList.Add($"folder deleted: {folder}");
+            }
+        }
     }
 }
