@@ -1,7 +1,21 @@
 ﻿using Veeam_FileSync;
+using System.CommandLine;
 
-String sourceFolder = "";
-String destinationFolder = "";
-int interval = 1000;
+Option<string> sourceFolder = new("-s")
+{
+    Description = "Source folder path"
+};
 
-FolderComparator.CheckFodlers();
+Option<string> replicaFolder = new("-r")
+{
+    Description = "Replica folder path"
+};
+
+Option<int> interval = new("-i")
+{
+    Description = "Time between each copy"
+};
+
+
+var fc = new FolderComparator();
+fc.CheckFodlers();

@@ -3,16 +3,24 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Veeam_FileSync
 {
     internal class FolderComparator
     {
-        static public void CheckFodlers()
-        {
 
-            string sourceDirPath = "";
-            string replicaDirPath = "";
+         string sourceDirPath = "";
+         string replicaDirPath = "";
+
+        public FolderComparator(string source = "", string replica = "")
+        {
+            this.sourceDirPath = source;
+            this.replicaDirPath = replica;
+        }
+
+         public void CheckFodlers()
+        {
 
             if (!Directory.Exists(sourceDirPath)) return;
             if (!Directory.Exists(replicaDirPath)) return;
@@ -20,6 +28,16 @@ namespace Veeam_FileSync
 
             string[] filesSource = Directory.GetFiles(sourceDirPath, "*", SearchOption.AllDirectories);
             string[] fileSourceRelative = filesSource.Select(s => s.Replace($"{sourceDirPath}\\", "")).ToArray();
+
+            string[] dirsSource = Directory.GetDirectories(sourceDirPath, "*", SearchOption.AllDirectories);
+
+            foreach (var dir in dirsSource)
+            {
+                string rel = Path.GetRelativePath(sourceDirPath, dir);
+                string destDir = Path.Combine(replicaDirPath, rel);
+                Directory.CreateDirectory(destDir);
+            }
+
 
             var sourceMap = filesSource.Zip(fileSourceRelative, (full, relative) => new { full, relative })
                                  .ToDictionary(x => x.full, x => x.relative);
@@ -29,6 +47,10 @@ namespace Veeam_FileSync
 
             var replicaMap = filesReplica.Zip(fileReplicaRelative, (full, relative) => new { full, relative })
                                  .ToDictionary(x => x.full, x => x.relative);
+
+
+
+
 
             foreach (var pathSource in sourceMap)
             {
@@ -59,9 +81,18 @@ namespace Veeam_FileSync
         }
 
 
-        static private void CopyFile(string source, string replica, string name)
+         private void CopyFile(string source, string replica, string name)
         {
+            //int i = name.LastIndexOf('\\');
+            //string rel = name.Remove(i, name.Length - i);
+
             File.Copy(source, $"{replica}\\{name}", true);
+        }
+
+
+        private void LogOperation()
+        {
+            //TO DO
         }
 
     }
