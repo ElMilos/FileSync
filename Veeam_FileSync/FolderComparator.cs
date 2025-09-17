@@ -11,34 +11,34 @@ namespace Veeam_FileSync
     internal class FolderComparator
     {
 
-        string sourceDirPath = "";
-        string replicaDirPath = "";
-        string logFilePath = "";
-        List<string> operationList = new List<string>();
+       private string _sourceDirPath = "";
+       private string _replicaDirPath = "";
+       private string _logFilePath = "";
+       List<string> operationList = new List<string>();
 
         public FolderComparator(string source = "", string replica = "", string log = "log.txt")
         {
-            this.sourceDirPath = source;
-            this.replicaDirPath = replica;
-            this.logFilePath = log;
+            this._sourceDirPath = source;
+            this._replicaDirPath = replica;
+            this._logFilePath = log;;
         }
 
         public void CheckFodlers()
         {
 
-            if (!Directory.Exists(sourceDirPath)) return;
-            if (!Directory.Exists(replicaDirPath)) return;
+            if (!Directory.Exists(_sourceDirPath)) return;
+            if (!Directory.Exists(_replicaDirPath)) return;
 
 
-            var sourceMap = GetFilesMap(sourceDirPath);
-            var replicaMap = GetFilesMap(replicaDirPath);
+            var sourceMap = GetFilesMap(_sourceDirPath);
+            var replicaMap = GetFilesMap(_replicaDirPath);
 
-            var dirsSourceRelative = GetDirsList(sourceDirPath);
-            var dirsReplicaRelative = GetDirsList(replicaDirPath);
+            var dirsSourceRelative = GetDirsList(_sourceDirPath);
+            var dirsReplicaRelative = GetDirsList(_replicaDirPath);
 
             SyncDir(dirsSourceRelative, dirsReplicaRelative);
             SyncFiles(sourceMap, replicaMap);
-
+            DeleteExcessDirs(dirsSourceRelative, dirsReplicaRelative);
             LogToFile();
         }
 
@@ -70,7 +70,7 @@ namespace Veeam_FileSync
 
             foreach (var folder in addition)
             {
-                string destDir = Path.Combine(replicaDirPath, folder);
+                string destDir = Path.Combine(_replicaDirPath, folder);
                 Directory.CreateDirectory(destDir);
 
                 operationList.Add($"folder added: {folder}");
@@ -97,15 +97,15 @@ namespace Veeam_FileSync
                     {
                         if (infoSource.LastWriteTimeUtc != infoReplica.LastWriteTimeUtc)
                         {
-                            CopyFile(pathSource.Key, replicaDirPath, pathReplica.Value);
+                            CopyFile(pathSource.Key, _replicaDirPath, pathReplica.Value);
                             operationList.Add($"File updated: {pathReplica.Key}");
                         }
                         replicaMap.Remove(pathReplica.Key);
                     }
                     continue;
                 }
-                CopyFile(pathSource.Key, replicaDirPath, pathSource.Value);
-                operationList.Add($"File added: {replicaDirPath}{pathSource.Value}");
+                CopyFile(pathSource.Key, _replicaDirPath, pathSource.Value);
+                operationList.Add($"File added: {_replicaDirPath}{pathSource.Value}");
             }
 
             DeleteExcessFiles(replicaMap);
@@ -121,7 +121,7 @@ namespace Veeam_FileSync
         {
            foreach (string log in operationList)
             {
-                File.AppendAllText(logFilePath, $"{log}\n");
+                File.AppendAllText(_logFilePath, $"{log}\n");
             }
         }
 
