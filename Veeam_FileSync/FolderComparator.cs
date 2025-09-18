@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Dynamic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
-
-namespace Veeam_FileSync
+﻿namespace Veeam_FileSync
 {
     internal class FolderComparator
     {
@@ -16,7 +8,7 @@ namespace Veeam_FileSync
        private string _logFilePath = "";
        List<string> operationList = new List<string>();
 
-        public FolderComparator(string source = "", string replica = "", string log = "log.txt")
+        public FolderComparator(string source = "E:\\FolderTestowy\\source", string replica = "E:\\FolderTestowy\\replica", string log = "log.txt")
         {
             this._sourceDirPath = source;
             this._replicaDirPath = replica;
@@ -59,14 +51,15 @@ namespace Veeam_FileSync
                 s => s.Replace($"{folderPath}\\", "")).ToArray();
 
             var map = filesSource.Zip(fileSourceRelative, (full, relative) => new { full, relative })
-                                 .ToDictionary(x => x.full, x => x.relative);
+                                 .ToDictionary(x => x.relative, x => x.full);
             return map;
         }
 
 
         private void SyncDir(List<string> sourceDir, List<string> replicaDir)
         {
-            var addition = sourceDir.Except(replicaDir).ToList();
+            var addition = sourceDir.Except(replicaDir).OrderByDescending(p => p.Length)
+                        .ToList();
 
             foreach (var folder in addition)
             {
@@ -77,38 +70,54 @@ namespace Veeam_FileSync
             }
         }
 
+        private void DeleteExcessDirs(List<string> sourceDir, List<string> replicaDir)
+        {
+            var excess = replicaDir.Except(sourceDir).OrderByDescending(p => p.Length)
+                        .ToList();
+
+            foreach (var folder in excess)
+            {
+                string path = Path.Combine(_replicaDirPath, folder);
+
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                }
+            }
+        }
+
         private void SyncFiles(Dictionary<string, string> sourceMap, Dictionary<string, string> replicaMap)
         { 
 
             foreach (var pathSource in sourceMap)
             {
-                Console.WriteLine(pathSource);
-                var infoSource = new FileInfo(pathSource.Key);
 
-                Console.WriteLine(infoSource.Length);
-                Console.WriteLine(infoSource.LastWriteTimeUtc);
-                Console.WriteLine(infoSource.CreationTimeUtc);
-                Console.WriteLine("\r\r");
-
-                foreach (var pathReplica in replicaMap)
+                if (!replicaMap.ContainsKey(pathSource.Key))
                 {
-                    var infoReplica = new FileInfo(pathReplica.Key);
-                    if (pathReplica.Value.Equals(pathSource.Value))
-                    {
-                        if (infoSource.LastWriteTimeUtc != infoReplica.LastWriteTimeUtc)
-                        {
-                            CopyFile(pathSource.Key, _replicaDirPath, pathReplica.Value);
-                            operationList.Add($"File updated: {pathReplica.Key}");
-                        }
-                        replicaMap.Remove(pathReplica.Key);
-                    }
+                    CopyFile(pathSource.Value, _replicaDirPath, pathSource.Key);
+                    operationList.Add($"File added: {_replicaDirPath}{pathSource.Key}");
                     continue;
                 }
-                CopyFile(pathSource.Key, _replicaDirPath, pathSource.Value);
-                operationList.Add($"File added: {_replicaDirPath}{pathSource.Value}");
+                else
+                {
+                    string hashOrginal = GetFileHash(pathSource.Value);
+                    string hashCopy = GetFileHash(replicaMap[pathSource.Key]);
+
+                    if (hashOrginal == hashCopy) continue;
+
+                    CopyFile(pathSource.Value, _replicaDirPath, pathSource.Key);
+                    operationList.Add($"File updated: {_replicaDirPath}{pathSource.Key}");
+                }
             }
 
-            DeleteExcessFiles(replicaMap);
+            DeleteExcessFiles(sourceMap, replicaMap);
+        }
+
+        private string GetFileHash(string path)
+        {
+            return PowerShellComm.RunScript(
+            $"Get-FileHash -Path  \"{path}\"  | Select-Object -ExpandProperty Hash").Trim();
+            
         }
 
          private void CopyFile(string source, string replica, string name)
@@ -116,35 +125,28 @@ namespace Veeam_FileSync
             File.Copy(source, $"{replica}\\{name}", true);
         }
 
+        private void DeleteExcessFiles(Dictionary<string, string> sourceMap, Dictionary<string, string> replicaMap)
+        {
+            var excess = replicaMap.Keys.Except(sourceMap.Keys);
+
+            foreach (var relPath in excess)
+            {
+                string path = replicaMap[relPath];
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    operationList.Add($"File deleted: {path}");
+                }
+            }
+        }
 
         private void LogToFile()
         {
-           foreach (string log in operationList)
+            foreach (string log in operationList)
             {
                 File.AppendAllText(_logFilePath, $"{log}\n");
             }
-        }
-
-        private void DeleteExcessFiles(Dictionary<string,string> excessMap)
-        {
-            foreach (var file in excessMap)
-            {
-                File.Delete(file.Key);
-
-                operationList.Add($"File deleted: {file.Key}");
-            }
-        }
-
-        private void DeleteExcessDirs(List<string> sourceDir, List<string> replicaDir)
-        {
-            var excess = replicaDir.Except(sourceDir).ToList();
-
-            foreach (var folder in excess)
-            {
-                File.Delete(folder);
-
-                operationList.Add($"folder deleted: {folder}");
-            }
+            operationList.Clear();
         }
     }
 }

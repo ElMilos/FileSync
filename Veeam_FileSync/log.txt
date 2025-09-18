@@ -1,0 +1,7 @@
+File updated: E:\FolderTestowy\replicaFolderA\B.txt
+folder added: Nowy folder
+folder added: AAA
+File deleted: E:\FolderTestowy\replica\AAA\Nowy dokument sformatowany.rtf
+File deleted: E:\FolderTestowy\replica\AAA\asdass.txt
+File added: E:\FolderTestowy\replicaAAA\asd.txt
+File updated: E:\FolderTestowy\replicaAAA\asd.txt

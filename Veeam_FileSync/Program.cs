@@ -1,6 +1,4 @@
-﻿using System.CommandLine;
-using System.IO;
-using Veeam_FileSync;
+﻿using Veeam_FileSync;
 
 List<String> agrsList = new List<string>(args);
 int interval = 1000;
@@ -44,7 +42,11 @@ try
         fc.CheckFodlers();
     }
 }
-catch 
+catch (OperationCanceledException)
+{
+    Console.WriteLine("\nProgram stopped");
+}
+catch
 {
     Console.Error.WriteLine("Error: incorrect data");
 }
